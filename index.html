@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111315">
+<title>Hızlı Okuyucu</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Okuyucu">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,400;7..72,500;7..72,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* VOICE: quiet, focused reading instrument
+   IDEA: a typesetter's composing stick: one line, one fixation point
+   PICTURE: the word itself, large, red fixation letter between two hairline guides with a notch
+   COLOUR and TYPE: ink and paper, one red for the fixation point; Literata for reading, Inter for controls
+   LAYOUT: full-height stage, every control docked in the thumb zone at the bottom */
+:root{color-scheme:light dark;--bg:light-dark(#ffffff,#111315);--ink:light-dark(#15171a,#ebe8e2);--mute:light-dark(#686c73,#8f939a);--line:light-dark(#e3e3e0,#272a2e);--panel:light-dark(#f2f2f0,#1a1c1f);--red:light-dark(#d62828,#ff5252);--hl:light-dark(#ffe7a0,#4b3e12)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Inter,system-ui,sans-serif;overflow:hidden;-webkit-tap-highlight-color:transparent}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;min-height:44px;min-width:44px;border-radius:12px;touch-action:manipulation}
+button:focus-visible,input:focus-visible,select:focus-visible,.pick:focus-within{outline:2px solid var(--red);outline-offset:2px}
+[hidden]{display:none!important}
+.scr{position:fixed;inset:0;display:flex;flex-direction:column;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+#home{overflow-y:auto}
+.hero{flex:none;min-height:38vh;display:flex;align-items:center;background:var(--panel)}
+.rw{position:relative;width:100%;padding:24px 0}
+.rw::before,.rw::after{content:"";position:absolute;left:6%;right:6%;height:1px;background:var(--mute);opacity:.45}
+.rw::before{top:0}.rw::after{bottom:0}
+.n{position:absolute;left:50%;width:2px;height:12px;margin-left:-1px;background:var(--red)}.n.t{top:0}.n.b{bottom:0}
+.word{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);font:500 40px/1.2 Literata,Georgia,serif;white-space:pre}
+.word>:first-child{text-align:right;overflow:hidden}.word>:nth-child(2){color:var(--red)}.word>:last-child{overflow:hidden}
+.hero .word{font-size:clamp(44px,12vw,76px)}
+.hb{padding:26px max(5vw,18px) 40px;max-width:640px;margin:0 auto;width:100%}
+h1{font:600 clamp(32px,8vw,46px)/1.05 Literata,Georgia,serif;margin:0 0 10px;text-wrap:balance}
+.lead{color:var(--mute);margin:0 0 22px}
+.pick{display:flex;flex-direction:column;align-items:center;gap:4px;padding:26px 16px;border:1.5px dashed var(--mute);border-radius:18px;text-align:center;cursor:pointer}
+.pick b{font-size:17px}.pick span{color:var(--mute);font-size:14px}.pick.over{border-color:var(--red);background:var(--panel)}
+.pick input{position:absolute;opacity:0;width:1px;height:1px}
+.btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.btn{flex:1 1 170px;background:var(--panel);padding:10px 16px;font-weight:500}
+.btn.pri{background:var(--ink);color:var(--bg)}
+.note{font-size:13px;color:var(--mute);margin:8px 0 0}
+#err{color:var(--red);min-height:1.5em;margin:14px 0 0}
+.tips{margin-top:26px;color:var(--mute);font-size:15px}.tips h2{font:600 17px/1.3 Inter;color:var(--ink);margin:0 0 8px}.tips ul{margin:0;padding-left:20px}.tips li{margin:4px 0}
+.top{display:flex;align-items:center;gap:4px;padding:4px 6px;border-bottom:1px solid var(--line)}
+.ttl{flex:1;display:flex;flex-direction:column;overflow:hidden;padding-right:8px}
+.ttl b{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+select{font:13px Inter,sans-serif;color:var(--mute);background:var(--bg);border:0;padding:0;width:100%;min-height:26px}
+.ic{display:grid;place-items:center}.ic svg,.play svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+#stage{flex:1;position:relative;overflow:hidden}
+#rsvp{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;padding:0 10px 18%}
+#ctx{position:absolute;left:0;right:0;bottom:14px;margin:0;padding:0 max(5vw,16px);color:var(--mute);font:16px/1.55 Literata,serif;text-align:center;max-height:38%;overflow:auto}
+#ctx mark{background:var(--hl);color:var(--ink);border-radius:3px;padding:0 2px}
+#flow{position:absolute;inset:0;overflow-y:auto;padding-inline:max(6vw,18px);font:19px/1.75 Literata,Georgia,serif;overscroll-behavior:contain}
+#flow p{max-width:34em;margin:0 auto .9em}
+#flow.scroll{-webkit-mask-image:linear-gradient(transparent 4%,#000 24%,#000 52%,transparent 92%);mask-image:linear-gradient(transparent 4%,#000 24%,#000 52%,transparent 92%)}
+#flow span.on{background:var(--hl);border-radius:3px;box-shadow:0 0 0 2px var(--hl)}
+#band{position:absolute;left:0;right:0;border-left:3px solid var(--red);pointer-events:none}
+.ctl{border-top:1px solid var(--line);padding:6px max(4vw,12px) 10px;display:grid;gap:6px}
+input[type=range]{width:100%;accent-color:var(--red);min-height:30px;margin:0}
+.info{display:flex;justify-content:space-between;gap:10px;font-size:13px;color:var(--mute);font-variant-numeric:tabular-nums}.info span{white-space:nowrap}
+.mainrow{display:flex;justify-content:center;align-items:center;gap:22px}
+.play{width:62px;height:62px;border-radius:50%;background:var(--ink);color:var(--bg);display:grid;place-items:center}
+.play svg{width:28px;height:28px;fill:currentColor;stroke:none}
+.seg{display:flex;background:var(--panel);border-radius:12px;padding:3px}
+.seg button{flex:1;min-height:38px;font-size:14px;font-weight:500;color:var(--mute);border-radius:9px}
+.seg button[aria-pressed=true]{background:var(--bg);color:var(--ink);box-shadow:0 1px 3px #0003}
+.setrow{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;font-size:14px}
+.wp{flex:1 1 180px;display:flex;align-items:center;gap:8px}
+output{min-width:5.2em;font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:500}
+.mini{display:flex;align-items:center;background:var(--panel);border-radius:10px;padding:0 2px}
+.mini small{padding:0 6px;color:var(--mute)}
+.mini button{min-width:40px;min-height:40px;font-size:14px;border-radius:9px}
+.mini button[aria-pressed=true]{color:var(--red);font-weight:600}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<section id="home" class="scr">
+  <div class="hero"><div class="rw" aria-hidden="true"><i class="n t"></i><div class="word"><span id="dl"></span><span id="dp"></span><span id="dr"></span></div><i class="n b"></i></div></div>
+  <div class="hb">
+    <h1>Gözün hiç kıpırdamadan oku</h1>
+    <p class="lead">EPUB, KEPUB ya da MOBI dosyanı aç. Kelimeler tek tek ekranda belirsin ya da metin sabit hızda aksın. Dosya telefonundan dışarı çıkmaz.</p>
+    <label class="pick" id="pick"><input type="file" id="file"><b>Kitap seç</b><span>.epub · .kepub · .mobi · .azw3 · .prc</span></label>
+    <div class="btns"><button class="btn pri" id="lastBtn" hidden>Son kitaba devam et</button><button class="btn" id="demoBtn">Örnek metinle dene</button></div>
+    <p class="note">Örnek metin bu uygulama için yazıldı.</p>
+    <p id="err" role="alert"></p>
+    <div class="tips"><h2>Modlar</h2><ul>
+      <li><b>Kelime:</b> RSVP. Kırmızı harf gözün odaklanacağı nokta. Noktalama ve uzun kelimelerde otomatik yavaşlar.</li>
+      <li><b>Akış:</b> Metin yukarı kayar, sol kenardaki kırmızı çizgi okuma bandını gösterir.</li>
+      <li><b>Takip:</b> Sayfa düzeni yerinde kalır, okunan kelime vurgulanır. Uzun okumalarda daha az yorar.</li>
+      <li>Ekrana dokun: başlat/durdur. Durunca cümlenin tamamı altta görünür. Geri tuşu cümlenin başına döner.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section id="reader" class="scr" hidden>
+  <header class="top">
+    <button class="ic" id="backBtn" aria-label="Kitaplara dön"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <div class="ttl"><b id="bTitle"></b><select id="chSel" aria-label="Bölüm"></select></div>
+  </header>
+  <main id="stage">
+    <div id="rsvp"><div class="rw"><i class="n t"></i><div class="word" id="word"><span id="wl"></span><span id="wp"></span><span id="wr"></span></div><i class="n b"></i></div><p id="ctx"></p></div>
+    <div id="flow" hidden></div>
+    <div id="band" hidden></div>
+  </main>
+  <footer class="ctl">
+    <input type="range" id="prog" min="0" max="1000" value="0" aria-label="Kitapta ilerleme">
+    <div class="info"><span id="pct">%0</span><span id="eta"></span></div>
+    <div class="mainrow">
+      <button class="ic" id="prevS" aria-label="Önceki cümle"><svg viewBox="0 0 24 24"><path d="M11 6l-6 6 6 6M19 6l-6 6 6 6"/></svg></button>
+      <button class="play" id="playBtn" aria-label="Başlat"><svg viewBox="0 0 24 24" id="playIc"><path d="M8 5v14l11-7z"/></svg></button>
+      <button class="ic" id="nextS" aria-label="Sonraki cümle"><svg viewBox="0 0 24 24"><path d="M13 6l6 6-6 6M5 6l6 6-6 6"/></svg></button>
+    </div>
+    <div class="seg" id="modes"><button data-m="rsvp">Kelime</button><button data-m="scroll">Akış</button><button data-m="pacer">Takip</button></div>
+    <div class="setrow">
+      <div class="wp"><input type="range" id="wpmR" min="100" max="1000" step="25" aria-label="Okuma hızı"><output id="wpmO"></output></div>
+      <div class="mini" id="chunkBox"><small>Grup</small><button data-c="1">1</button><button data-c="2">2</button><button data-c="3">3</button></div>
+      <div class="mini"><button id="fDn" aria-label="Yazıyı küçült">A−</button><button id="fUp" aria-label="Yazıyı büyüt">A+</button></div>
+    </div>
+  </footer>
+</section>
+
+<script>
+{
+const $=s=>document.querySelector(s);
+const S={wpm:300,mode:'rsvp',chunk:1,fs:40};
+try{Object.assign(S,JSON.parse(localStorage.getItem('hr:set')||'{}'))}catch(e){}
+const saveSet=()=>{try{localStorage.setItem('hr:set',JSON.stringify(S))}catch(e){}};
+const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let book=null,W=[],idx=0,shown=0,playing=false,timer=0,ramp=0,bookId='',rCh=-1,spans=[],onSpan=null,bandY=0,pxSec=0,carry=0,lastTs=0,lock=null,tickN=0;
+const flow=$('#flow'),stage=$('#stage');
+
+/* ---------- ZIP (EPUB/KEPUB) ---------- */
+async function unzip(buf){
+  const dv=new DataView(buf),u8=new Uint8Array(buf),td=new TextDecoder();let e=-1;
+  for(let i=buf.byteLength-22;i>=Math.max(0,buf.byteLength-65557);i--)if(dv.getUint32(i,true)===0x06054b50){e=i;break}
+  if(e<0)throw new Error('ZIP yapısı bulunamadı.');
+  const n=dv.getUint16(e+10,true),files={};let p=dv.getUint32(e+16,true);
+  for(let k=0;k<n&&dv.getUint32(p,true)===0x02014b50;k++){
+    const nl=dv.getUint16(p+28,true);
+    files[td.decode(u8.subarray(p+46,p+46+nl))]={m:dv.getUint16(p+10,true),cs:dv.getUint32(p+20,true),lo:dv.getUint32(p+42,true)};
+    p+=46+nl+dv.getUint16(p+30,true)+dv.getUint16(p+32,true);
+  }
+  const names=Object.keys(files);
+  return{find:n=>names.find(x=>x.toLowerCase()===n.toLowerCase()),async get(name){
+    const f=files[name];if(!f)return null;
+    const s=f.lo+30+dv.getUint16(f.lo+26,true)+dv.getUint16(f.lo+28,true),d=u8.subarray(s,s+f.cs);
+    if(f.m===0)return d;
+    return new Uint8Array(await new Response(new Blob([d]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
+  }};
+}
+const BLOCK=new Set('p div h1 h2 h3 h4 h5 h6 li blockquote pre dt dd section article tr td th figcaption br hr table ul ol header footer aside'.split(' '));
+function parseMarkup(str,html){
+  let d=null;
+  if(!html){d=new DOMParser().parseFromString(str,'application/xhtml+xml');if(d.getElementsByTagName('parsererror').length)d=null}
+  if(!d)d=new DOMParser().parseFromString(str,'text/html');
+  const body=d.getElementsByTagName('body')[0]||d.documentElement;let out='';
+  (function walk(n){for(let c=n.firstChild;c;c=c.nextSibling){
+    if(c.nodeType===3)out+=c.nodeValue.replace(/\s+/g,' ');
+    else if(c.nodeType===1){const t=c.localName.toLowerCase();if(t==='script'||t==='style'||t==='rt'||t==='head')continue;const b=BLOCK.has(t);if(b)out+='\n';walk(c);if(b)out+='\n'}
+  }})(body);
+  const paras=out.split(/\n+/).map(s=>s.replace(/\s+/g,' ').trim()).filter(Boolean);
+  const h=['h1','h2','h3'].map(t=>body.getElementsByTagName(t)[0]).find(Boolean);
+  return{title:(h&&h.textContent.replace(/\s+/g,' ').trim())||'',paras};
+}
+const rel=(base,href)=>{const o=[];for(const p of (base+href).split('/')){if(p==='..')o.pop();else if(p&&p!=='.')o.push(p)}return o.join('/')};
+async function readEpub(buf){
+  const z=await unzip(buf),td=new TextDecoder(),txt=async n=>{const f=z.find(n),b=f&&await z.get(f);return b?td.decode(b):null};
+  const cont=await txt('META-INF/container.xml');if(!cont)throw new Error('container.xml yok; bu geçerli bir EPUB değil.');
+  const opfPath=new DOMParser().parseFromString(cont,'application/xml').getElementsByTagName('rootfile')[0].getAttribute('full-path');
+  const opf=new DOMParser().parseFromString(await txt(opfPath),'application/xml'),base=opfPath.includes('/')?opfPath.slice(0,opfPath.lastIndexOf('/')+1):'';
+  const man={};for(const it of opf.getElementsByTagName('item'))man[it.getAttribute('id')]=it.getAttribute('href');
+  const tEl=opf.getElementsByTagName('dc:title')[0]||opf.getElementsByTagNameNS('*','title')[0],chapters=[];
+  for(const ir of opf.getElementsByTagName('itemref')){
+    const href=man[ir.getAttribute('idref')];if(!href)continue;
+    const s=await txt(rel(base,decodeURIComponent(href.split('#')[0])));if(!s)continue;
+    const ch=parseMarkup(s);if(ch.paras.length)chapters.push(ch);
+  }
+  return{title:tEl?tEl.textContent.trim():'',chapters};
+}
+/* ---------- MOBI / AZW3 / PRC ---------- */
+function lz77(src){
+  const out=new Uint8Array(src.length*8+4096);let o=0,i=0;
+  while(i<src.length){const c=src[i++];
+    if(c>=1&&c<=8){for(let k=0;k<c&&i<src.length;k++)out[o++]=src[i++]}
+    else if(c<0x80)out[o++]=c;
+    else if(c>=0xC0){out[o++]=32;out[o++]=c^0x80}
+    else{if(i>=src.length)break;const v=(c<<8)|src[i++],dist=(v>>3)&0x7ff,len=(v&7)+3;if(!dist||dist>o)continue;for(let k=0;k<len;k++){out[o]=out[o-dist];o++}}
+  }
+  return out.subarray(0,o);
+}
+function trailing(r,flags){
+  let num=0,f=flags>>1;const size=r.length;
+  while(f){if(f&1){let bit=0,res=0,ps=size-num;while(ps>0){const v=r[ps-1];res|=(v&0x7f)<<bit;bit+=7;ps--;if((v&0x80)||bit>=28)break}num+=res}f>>=1}
+  if(flags&1)num+=(r[size-num-1]&3)+1;
+  return Math.min(num,size);
+}
+function readMobi(buf){
+  const dv=new DataView(buf),u8=new Uint8Array(buf),n=dv.getUint16(76),off=i=>dv.getUint32(78+i*8),rec=i=>u8.subarray(off(i),i+1<n?off(i+1):u8.length);
+  const r0=rec(0),d0=new DataView(r0.buffer,r0.byteOffset,r0.byteLength),comp=d0.getUint16(0),cnt=d0.getUint16(8);
+  if(d0.getUint16(12))throw new Error('Bu dosya DRM ile korunuyor; açılamaz.');
+  if(comp===17480)throw new Error('Bu MOBI, HUFF/CDIC sıkıştırması kullanıyor. Calibre ile EPUB’a çevirip açabilirsin.');
+  let codec='windows-1252',flags=0,title='',isMobi=String.fromCharCode(...r0.subarray(16,20))==='MOBI';
+  if(isMobi){
+    if(d0.getUint32(28)===65001)codec='utf-8';
+    if(d0.getUint32(20)>=0xE4)flags=d0.getUint16(0xF2);
+    const to=d0.getUint32(84),tl=d0.getUint32(88);title=new TextDecoder(codec).decode(r0.subarray(to,to+tl));
+  }
+  if(!title)title=new TextDecoder('latin1').decode(u8.subarray(0,32)).replace(/\0.*$/,'').replace(/_/g,' ');
+  const parts=[];let total=0;
+  for(let i=1;i<=cnt&&i<n;i++){let r=rec(i);r=r.subarray(0,r.length-trailing(r,flags));const d=comp===2?lz77(r):r;parts.push(d);total+=d.length}
+  const all=new Uint8Array(total);let p=0;for(const d of parts){all.set(d,p);p+=d.length}
+  const text=new TextDecoder(codec).decode(all);
+  const chapters=isMobi?text.split(/<mbp:pagebreak[^>]*>/i).map(h=>parseMarkup(h,true)).filter(c=>c.paras.length)
+    :[{title:'',paras:text.split(/\r?\n+/).map(s=>s.trim()).filter(Boolean)}];
+  return{title,chapters};
+}
+/* ---------- words & timing ---------- */
+const ABBR=new Set('dr prof doç yrd vb vs bkz sn örn yy no mr mrs st av alb gen ltd şti'.split(' '));
+const TAIL=/["'”’»)\]]*$/;
+function endsSent(t){if(!/[.!?…]["'”’»)\]]*$/.test(t))return false;const core=t.replace(/[.!?…"'”’»)\]]+$/,'').toLocaleLowerCase('tr');return core.length>1&&!ABBR.has(core)}
+const isStop=w=>w.pe||endsSent(w.t);
+function mult(w){
+  const t=w.t,L=t.replace(/[^\p{L}\p{N}]/gu,'').length;let m=1;
+  if(L>7)m+=(L-7)*.08;if(/\d/.test(t))m+=.3;
+  if(w.pe)m+=1.8;else if(endsSent(t))m+=1.4;else if(/[,;:—–)]["'”’»]*$/.test(t))m+=.6;
+  return m;
+}
+function orp(t){
+  const lead=(t.match(/^[^\p{L}\p{N}]*/u)||[''])[0].length,trail=(t.match(/[^\p{L}\p{N}]*$/u)||[''])[0].length,L=Math.max(t.length-lead-trail,1);
+  return Math.min(lead+(L<=1?0:L<=5?1:L<=9?2:L<=13?3:4),t.length-1);
+}
+function chunkEnd(i){
+  if(S.mode!=='rsvp'||S.chunk<2)return i+1;
+  let j=i+1,len=W[i].t.length;
+  while(j<W.length&&j-i<S.chunk){const pv=W[j-1];if(pv.pe||/[.,;:!?…]["'”’»)]*$/.test(pv.t)||len+W[j].t.length>15)break;len+=W[j].t.length+1;j++}
+  return j;
+}
+function build(){
+  W=[];book.chapters.forEach((ch,ci)=>{ch.start=W.length;if(!ch.title)ch.title=(ch.paras[0]||'').slice(0,48);
+    for(const p of ch.paras){const ws=p.split(' ').filter(Boolean);ws.forEach((t,k)=>W.push({t,c:ci,pe:k===ws.length-1}))}ch.end=W.length});
+}
+const sentStart=i=>{while(i>0&&!isStop(W[i-1]))i--;return i};
+const sentEnd=i=>{while(i<W.length-1&&!isStop(W[i]))i++;return Math.min(i+1,W.length-1)};
+
+/* ---------- RSVP view ---------- */
+function setWord(L,P,R,t,k,box){
+  const side=Math.max(k,t.length-k-1)+.6,half=(box.clientWidth||320)/2*.94,fs=Math.min(S.fs,half/(side*.56));
+  L.parentNode.style.fontSize=fs+'px';L.textContent=t.slice(0,k);P.textContent=t[k]||'';R.textContent=t.slice(k+1);
+}
+function showRSVP(i,j){
+  const t=W.slice(i,j).map(w=>w.t).join(' ');let k=j-i===1?orp(t):Math.round(t.length*.3);if(t[k]===' ')k++;
+  setWord($('#wl'),$('#wp'),$('#wr'),t,k,stage);
+}
+function showCtx(){
+  const c=$('#ctx');if(playing||S.mode!=='rsvp'||!W.length){c.innerHTML='';return}
+  const s=Math.max(sentStart(shown),shown-40),e=Math.min(sentEnd(shown),shown+40);
+  c.innerHTML=W.slice(s,e).map((w,k)=>s+k===shown?`<mark>${esc(w.t)}</mark>`:esc(w.t)).join(' ');
+}
+/* ---------- text views ---------- */
+function layout(){
+  const h=stage.clientHeight;bandY=Math.round(h*.36);
+  flow.style.paddingTop=bandY+'px';flow.style.paddingBottom=(h-bandY)+'px';flow.style.fontSize=Math.round(S.fs*.48)+'px';
+  const b=$('#band');b.style.top=(bandY-4)+'px';b.style.height=Math.round(S.fs*.48*1.75+8)+'px';
+  measure();
+}
+function measure(){if(!spans.length)return;const h=flow.scrollHeight-stage.clientHeight;pxSec=S.wpm/60*(h/spans.length)}
+function renderCh(c){
+  const ch=book.chapters[c];let h='',i=ch.start;
+  for(const p of ch.paras){const n=p.split(' ').filter(Boolean).length;h+='<p>';for(let k=0;k<n;k++,i++)h+=`<span>${esc(W[i].t)}</span> `;h+='</p>'}
+  flow.innerHTML=h;spans=flow.getElementsByTagName('span');rCh=c;onSpan=null;measure();
+}
+const spanOf=i=>{if(W[i].c!==rCh)renderCh(W[i].c);return spans[i-book.chapters[rCh].start]};
+function placeAt(i){const s=spanOf(i);if(s)flow.scrollTop=s.offsetTop-bandY}
+function wordAtBand(){
+  if(!spans.length)return idx;const y=flow.scrollTop+bandY;let lo=0,hi=spans.length-1;
+  while(lo<hi){const m=(lo+hi)>>1;if(spans[m].offsetTop+spans[m].offsetHeight>y)hi=m;else lo=m+1}
+  return book.chapters[rCh].start+lo;
+}
+function pace(i){
+  const s=spanOf(i);if(!s)return;if(onSpan)onSpan.classList.remove('on');s.classList.add('on');onSpan=s;
+  const top=s.offsetTop-flow.scrollTop;if(top<bandY*.5||top>bandY*1.7)flow.scrollTo({top:s.offsetTop-bandY,behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'auto':'smooth'});
+}
+/* ---------- playback ---------- */
+function step(){
+  if(!playing)return;if(idx>=W.length){pause();return}
+  const j=chunkEnd(idx);shown=idx;
+  if(S.mode==='rsvp')showRSVP(idx,j);else pace(idx);
+  let d=0;for(let k=idx;k<j;k++)d+=mult(W[k]);d*=60000/S.wpm;if(j-idx>1)d*=.9;
+  if(ramp>0){d*=1+ramp*.1;ramp--}
+  idx=j;info();if(++tickN%25===0)savePos();
+  timer=setTimeout(step,d);
+}
+function scrollLoop(ts){
+  if(!playing||S.mode!=='scroll')return;
+  if(lastTs){const f=Math.min((ts-lastTs)/1000,.1)*pxSec*(ramp>0?.6:1)+carry,px=Math.floor(f);carry=f-px;if(px)flow.scrollTop+=px}
+  lastTs=ts;if(ramp>0)ramp--;
+  if(flow.scrollTop+flow.clientHeight>=flow.scrollHeight-2){if(rCh+1<book.chapters.length){renderCh(rCh+1);flow.scrollTop=0}else{pause();return}}
+  if(++tickN%20===0){idx=wordAtBand();info();if(tickN%200===0)savePos()}
+  requestAnimationFrame(scrollLoop);
+}
+async function play(){
+  if(!W.length||playing)return;if(idx>=W.length-1)idx=0;
+  playing=true;ramp=S.mode==='scroll'?40:8;$('#ctx').innerHTML='';icon();
+  try{lock=await navigator.wakeLock.request('screen')}catch(e){lock=null}
+  if(S.mode==='scroll'){lastTs=0;carry=0;requestAnimationFrame(scrollLoop)}else step();
+}
+function pause(){
+  if(!playing)return;playing=false;clearTimeout(timer);
+  if(S.mode==='scroll')idx=wordAtBand();else idx=shown;
+  icon();showCtx();info();savePos();try{lock&&lock.release()}catch(e){}lock=null;
+}
+const toggle=()=>playing?pause():play();
+function icon(){$('#playIc').innerHTML=playing?'<path d="M7 5h4v14H7zM13 5h4v14h-4z"/>':'<path d="M8 5v14l11-7z"/>';$('#playBtn').setAttribute('aria-label',playing?'Durdur':'Başlat')}
+function refresh(){
+  idx=Math.max(0,Math.min(idx,W.length-1));shown=idx;
+  if(S.mode==='rsvp')showRSVP(idx,chunkEnd(idx));else if(S.mode==='scroll')placeAt(idx);else{placeAt(idx);pace(idx)}
+  showCtx();info();
+}
+const fmt=m=>m<1?'1 dk’dan az':m<60?Math.round(m)+' dk':Math.floor(m/60)+' sa '+Math.round(m%60)+' dk';
+function info(){
+  if(!W.length)return;const w=W[Math.min(idx,W.length-1)],ch=book.chapters[w.c],pc=idx/W.length;
+  $('#prog').value=Math.round(pc*1000);$('#pct').textContent='%'+Math.floor(pc*100)+' · '+(idx+1).toLocaleString('tr')+' / '+W.length.toLocaleString('tr');
+  $('#eta').textContent='bölüm sonuna '+fmt((ch.end-idx)/S.wpm)+' · kitap '+fmt((W.length-idx)/S.wpm);
+  if(+$('#chSel').value!==w.c)$('#chSel').value=w.c;
+}
+function setMode(m){
+  const was=playing;if(playing)pause();
+  S.mode=m;saveSet();
+  for(const b of $('#modes').children)b.setAttribute('aria-pressed',b.dataset.m===m);
+  $('#rsvp').hidden=m!=='rsvp';flow.hidden=m==='rsvp';$('#band').hidden=m!=='scroll';$('#chunkBox').hidden=m!=='rsvp';
+  flow.classList.toggle('scroll',m==='scroll');
+  if(m!=='rsvp'){layout();if(W.length&&W[idx].c!==rCh)renderCh(W[idx].c)}
+  if(onSpan){onSpan.classList.remove('on');onSpan=null}
+  refresh();if(was)play();
+}
+function setWpm(v){S.wpm=Math.max(100,Math.min(1000,v));$('#wpmR').value=S.wpm;$('#wpmO').textContent=S.wpm+' k/dk';measure();saveSet();if(!playing)info()}
+function setChunk(c){S.chunk=c;saveSet();for(const b of $('#chunkBox').querySelectorAll('button'))b.setAttribute('aria-pressed',+b.dataset.c===c);if(!playing)refresh()}
+function setFs(v){if(S.mode==='scroll'&&!playing)idx=wordAtBand();S.fs=Math.max(24,Math.min(76,v));saveSet();if(S.mode!=='rsvp'){layout();if(!playing)refresh();else if(S.mode==='scroll')placeAt(idx)}else if(!playing)refresh()}
+const savePos=()=>{try{localStorage.setItem('hr:pos:'+bookId,String(S.mode==='scroll'&&playing?wordAtBand():idx))}catch(e){}};
+function seekSent(dir){
+  if(S.mode==='scroll')idx=wordAtBand();const was=playing;if(playing)pause();
+  if(dir<0){let s=sentStart(idx);if(idx-s<3&&s>0)s=sentStart(s-1);idx=s}else idx=sentEnd(idx);
+  refresh();if(was)play();
+}
+/* ---------- storage of last book ---------- */
+const idb=()=>new Promise((res,rej)=>{const r=indexedDB.open('hizli-okuyucu',1);r.onupgradeneeded=()=>r.result.createObjectStore('b');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
+async function putLast(b){try{const db=await idb();db.transaction('b','readwrite').objectStore('b').put({title:b.title,chapters:b.chapters.map(c=>({title:c.title,paras:c.paras}))},'last')}catch(e){}}
+async function getLast(){try{const db=await idb();return await new Promise(r=>{const q=db.transaction('b').objectStore('b').get('last');q.onsuccess=()=>r(q.result||null);q.onerror=()=>r(null)})}catch(e){return null}}
+/* ---------- open ---------- */
+function openBook(b,store){
+  book=b;build();if(!W.length)throw new Error('Kitapta okunabilir metin bulunamadı.');
+  bookId=(b.title||'kitap')+'|'+W.length;let p=0;try{p=+localStorage.getItem('hr:pos:'+bookId)||0}catch(e){}
+  idx=p<W.length?p:0;rCh=-1;spans=[];
+  $('#bTitle').textContent=b.title||'Adsız kitap';
+  $('#chSel').innerHTML=b.chapters.map((c,i)=>`<option value="${i}">${i+1}. ${esc(c.title)}</option>`).join('');
+  $('#home').hidden=true;$('#reader').hidden=false;stopDemo();
+  setWpm(S.wpm);setChunk(S.chunk);setMode(S.mode);
+  if(store)putLast(b);
+}
+async function openFile(f){
+  const err=$('#err');err.textContent='Açılıyor…';
+  try{
+    const buf=await f.arrayBuffer(),u8=new Uint8Array(buf),magic=String.fromCharCode(...u8.subarray(60,68));
+    let b;
+    if(u8[0]===0x50&&u8[1]===0x4b)b=await readEpub(buf);
+    else if(magic==='BOOKMOBI'||magic==='TEXtREAd')b=readMobi(buf);
+    else throw new Error('Bu dosya EPUB, KEPUB ya da MOBI değil gibi görünüyor.');
+    if(!b.title)b.title=f.name.replace(/\.[^.]+$/,'').replace(/\.kepub$/i,'');
+    openBook(b,true);err.textContent='';
+  }catch(e){err.textContent=e.message||'Dosya açılamadı.'}
+}
+const DEMO={title:'Hızlı okumaya giriş',chapters:[
+ {title:'Gözün ritmi',paras:['Gözün Ritmi','Okurken gözlerimiz satır boyunca kaymaz; küçük sıçramalar yapar ve her duruşta birkaç harfi netleştirir. Bu duruşlara sabitlenme denir. Sıradan bir okur, her sabitlenmede saniyenin yaklaşık dörtte birini harcar.','Kelimeleri ekranın aynı noktasında göstermek bu sıçramaları ortadan kaldırır. Kırmızı harf, gözün bakması gereken yeri işaret eder; geri kalanını beyin kendisi tamamlar.','Yine de hız tek başına amaç değildir. Anlamadan geçilen bir sayfa, hiç okunmamış bir sayfadan pek farklı değildir. Bu yüzden virgüllerde ve noktalarda kısa molalar verilir, uzun kelimeler ekranda biraz daha uzun kalır.']},
+ {title:'Küçük adımlar',paras:['Küçük Adımlar','İlk gün dakikada üç yüz kelimeyle başlayın. Rahat hissettiğinizde hızı yirmi beş kelime artırın. Bir cümleyi kaçırdığınızı fark ederseniz geri tuşuna dokunun; cümlenin başına dönersiniz.','Uzun okumalarda Takip modu daha az yorar: sayfa düzeni yerinde kalır, yalnızca okunan kelime vurgulanır. Akış modunda ise metin sabit bir hızla yukarı kayar ve siz kırmızı çizginin gösterdiği banda bakarsınız.','Her gün on beş dakika yeterlidir. Birkaç hafta içinde hem hızınızın hem de odaklanma sürenizin arttığını göreceksiniz.']}]};
+/* ---------- home demo ---------- */
+let demoT=0;
+function startDemo(){
+  const ws='Gözün hiç kıpırdamadan, kelime kelime oku. Hız senin elinde.'.split(' ');let i=0;const box=$('.hero');
+  const show=()=>{const t=ws[i%ws.length];setWord($('#dl'),$('#dp'),$('#dr'),t,orp(t),box);i++};
+  show();if(!matchMedia('(prefers-reduced-motion:reduce)').matches)demoT=setInterval(show,330);
+}
+function stopDemo(){clearInterval(demoT)}
+/* ---------- events ---------- */
+$('#file').addEventListener('change',e=>{const f=e.target.files[0];if(f)openFile(f);e.target.value=''});
+const pick=$('#pick');
+pick.addEventListener('dragover',e=>{e.preventDefault();pick.classList.add('over')});
+pick.addEventListener('dragleave',()=>pick.classList.remove('over'));
+pick.addEventListener('drop',e=>{e.preventDefault();pick.classList.remove('over');const f=e.dataTransfer.files[0];if(f)openFile(f)});
+$('#demoBtn').addEventListener('click',()=>openBook(JSON.parse(JSON.stringify(DEMO)),false));
+$('#lastBtn').addEventListener('click',async()=>{const b=await getLast();if(b)openBook(b,false)});
+$('#backBtn').addEventListener('click',()=>{pause();savePos();$('#reader').hidden=true;$('#home').hidden=false;$('#lastBtn').hidden=false;startDemo()});
+$('#playBtn').addEventListener('click',toggle);
+$('#prevS').addEventListener('click',()=>seekSent(-1));
+$('#nextS').addEventListener('click',()=>seekSent(1));
+stage.addEventListener('click',toggle);
+$('#modes').addEventListener('click',e=>{const m=e.target.dataset.m;if(m&&m!==S.mode){if(S.mode==='scroll'&&!playing)idx=wordAtBand();setMode(m)}});
+$('#chunkBox').addEventListener('click',e=>{const c=+e.target.dataset.c;if(c)setChunk(c)});
+$('#wpmR').addEventListener('input',e=>setWpm(+e.target.value));
+$('#fDn').addEventListener('click',()=>setFs(S.fs-4));
+$('#fUp').addEventListener('click',()=>setFs(S.fs+4));
+$('#prog').addEventListener('input',e=>{const was=playing;if(playing)pause();idx=Math.floor(+e.target.value/1000*(W.length-1));refresh();if(was)play()});
+$('#chSel').addEventListener('change',e=>{const was=playing;if(playing)pause();idx=book.chapters[+e.target.value].start;refresh();if(was)play()});
+flow.addEventListener('scroll',()=>{if(!playing&&S.mode==='scroll'){clearTimeout(flow._t);flow._t=setTimeout(()=>{idx=wordAtBand();info();savePos()},200)}},{passive:true});
+document.addEventListener('keydown',e=>{
+  if($('#reader').hidden||e.target.tagName==='SELECT')return;
+  if(e.key===' '){e.preventDefault();toggle()}else if(e.key==='ArrowLeft')seekSent(-1);else if(e.key==='ArrowRight')seekSent(1);
+  else if(e.key==='ArrowUp'){e.preventDefault();setWpm(S.wpm+25)}else if(e.key==='ArrowDown'){e.preventDefault();setWpm(S.wpm-25)}
+});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){pause();savePos()}});
+const ro=new ResizeObserver(()=>{if(!book||$('#reader').hidden)return;if(S.mode!=='rsvp'){const i=S.mode==='scroll'?wordAtBand():idx;layout();if(!playing){idx=i;refresh()}}else if(!playing)refresh()});
+ro.observe(stage);
+getLast().then(b=>{if(b)$('#lastBtn').hidden=false});
+startDemo();
+if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
+</script>
+</body>
+</html>
