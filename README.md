@@ -6,7 +6,7 @@ Hiçbir sunucuya veri göndermez; ilk açılıştan sonra tamamen internetsiz ç
 ## GitHub Pages ile yayınlama
 1. GitHub'da yeni bir repo aç (ör. `hizli-okuyucu`), bu klasördeki dosyaları yükle.
 2. Settings → Pages → Branch: `main`, klasör: `/ (root)` → Save.
-3. Birkaç dakika sonra `https://sener.karaman.github.io/hizli-okuyucu/` adresinde açılır.
+3. Birkaç dakika sonra `https://sener-karaman.github.io/hizli-okuyucu/` adresinde açılır.
 
 ## Telefona kurma
 - **Android (Chrome):** sayfayı aç → ⋮ menü → *Uygulamayı yükle* / *Ana ekrana ekle*.
