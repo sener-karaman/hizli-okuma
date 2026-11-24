@@ -48,6 +48,12 @@ h1{font:600 clamp(32px,8vw,46px)/1.05 Literata,Georgia,serif;margin:0 0 10px;tex
 .btn.pri{background:var(--ink);color:var(--bg)}
 .note{font-size:13px;color:var(--mute);margin:8px 0 0}
 #err{color:var(--red);min-height:1.5em;margin:14px 0 0}
+.lib{margin:0 0 22px}.lib h2{font:600 17px/1.3 Inter;margin:0 0 6px}
+.bk{display:flex;align-items:center;border-bottom:1px solid var(--line)}
+.bk .o{flex:1;display:flex;flex-direction:column;align-items:flex-start;text-align:left;padding:10px 4px;border-radius:8px;position:relative}
+.bk b{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}.bk small{color:var(--mute);font-size:13px}
+.bk i{position:absolute;left:4px;bottom:0;height:2px;width:calc(var(--p) - 8px);max-width:calc(100% - 8px);background:var(--red)}
+.x svg{width:18px;height:18px;fill:none;stroke:var(--mute);stroke-width:2;stroke-linecap:round}
 .tips{margin-top:26px;color:var(--mute);font-size:15px}.tips h2{font:600 17px/1.3 Inter;color:var(--ink);margin:0 0 8px}.tips ul{margin:0;padding-left:20px}.tips li{margin:4px 0}
 .top{display:flex;align-items:center;gap:4px;padding:4px 6px;border-bottom:1px solid var(--line)}
 .ttl{flex:1;display:flex;flex-direction:column;overflow:hidden;padding-right:8px}
@@ -65,7 +71,7 @@ select{font:13px Inter,sans-serif;color:var(--mute);background:var(--bg);border:
 #glide,#lineT{position:absolute;left:0;top:0;z-index:-1;pointer-events:none;height:0}
 #glide{background:var(--hl);border-radius:6px;will-change:transform,width;transition-property:transform,width;transition-timing-function:cubic-bezier(.3,.7,.4,1)}
 #lineT{right:0;background:color-mix(in srgb,var(--hl) 32%,transparent);transition:transform .25s ease,height .25s ease}
-#voiceSel{flex:1 1 100%;font-size:14px;color:var(--ink);background:var(--panel);border-radius:10px;padding:0 10px;min-height:40px}
+#voiceSel{flex:1 1 200px;font-size:14px;color:var(--ink);background:var(--panel);border-radius:10px;padding:0 10px;min-height:40px}
 #ttsBtn{display:flex;align-items:center;gap:6px;padding:0 10px}#ttsBtn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2}
 #ttsBtn:disabled{opacity:.4}
 #band{position:absolute;left:0;right:0;border-left:3px solid var(--red);pointer-events:none}
@@ -94,8 +100,9 @@ output{min-width:5.2em;font-variant-numeric:tabular-nums;white-space:nowrap;font
   <div class="hb">
     <h1>Gözün hiç kıpırdamadan oku</h1>
     <p class="lead">EPUB, KEPUB ya da MOBI dosyanı aç. Kelimeler tek tek ekranda belirsin ya da metin sabit hızda aksın. Dosya telefonundan dışarı çıkmaz.</p>
+    <div class="lib" id="lib" hidden><h2>Son kitaplar</h2><div id="libList"></div><p class="note">En son açılan 5 kitap bu cihazda saklanır.</p></div>
     <label class="pick" id="pick"><input type="file" id="file"><b>Kitap seç</b><span>.epub · .kepub · .mobi · .azw3 · .prc</span></label>
-    <div class="btns"><button class="btn pri" id="lastBtn" hidden>Son kitaba devam et</button><button class="btn" id="demoBtn">Örnek metinle dene</button></div>
+    <div class="btns"><button class="btn" id="demoBtn">Örnek metinle dene</button></div>
     <p class="note">Örnek metin bu uygulama için yazıldı.</p>
     <p id="err" role="alert"></p>
     <div class="tips"><h2>Modlar</h2><ul>
@@ -131,6 +138,7 @@ output{min-width:5.2em;font-variant-numeric:tabular-nums;white-space:nowrap;font
       <div class="mini" id="chunkBox"><small>Grup</small><button data-c="1">1</button><button data-c="2">2</button><button data-c="3">3</button></div>
       <div class="mini"><button id="fDn" aria-label="Yazıyı küçült">A−</button><button id="fUp" aria-label="Yazıyı büyüt">A+</button></div>
       <div class="mini"><button id="ttsBtn" aria-pressed="false" aria-label="Sesli okuma"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>Ses</button></div>
+      <div class="mini" id="langBox" hidden><small>Dil</small></div>
       <select id="voiceSel" aria-label="Ses seçimi" hidden></select>
     </div>
   </footer>
@@ -139,7 +147,7 @@ output{min-width:5.2em;font-variant-numeric:tabular-nums;white-space:nowrap;font
 <script>
 {
 const $=s=>document.querySelector(s);
-const S={wpm:300,mode:'rsvp',chunk:1,fs:40,tts:false,voice:''};
+const S={wpm:300,mode:'rsvp',chunk:1,fs:40,tts:false,voices:{}};
 try{Object.assign(S,JSON.parse(localStorage.getItem('hr:set')||'{}'))}catch(e){}
 const saveSet=()=>{try{localStorage.setItem('hr:set',JSON.stringify(S))}catch(e){}};
 const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -232,7 +240,7 @@ function readMobi(buf){
   return{title,chapters};
 }
 /* ---------- words & timing ---------- */
-const ABBR=new Set('dr prof doç yrd vb vs bkz sn örn yy no mr mrs st av alb gen ltd şti'.split(' '));
+const ABBR=new Set('dr prof doç yrd vb vs bkz sn örn yy no mr mrs ms jr sr st av alb gen ltd şti e.g i.e fig vol ch'.split(' '));
 const TAIL=/["'”’»)\]]*$/;
 function endsSent(t){if(!/[.!?…]["'”’»)\]]*$/.test(t))return false;const core=t.replace(/[.!?…"'”’»)\]]+$/,'').toLocaleLowerCase('tr');return core.length>1&&!ABBR.has(core)}
 const isStop=w=>w.pe||endsSent(w.t);
@@ -320,21 +328,31 @@ function ease(){
 /* ---------- speech (device voices, offline when the voice is installed) ---------- */
 const synth=window.speechSynthesis;let voices=[],ttsGen=0,estT=0,rateT=0;
 const rate=()=>Math.max(.5,Math.min(2.2,S.wpm/170));
+const LN={tr:'Türkçe',en:'İngilizce',de:'Almanca',fr:'Fransızca',es:'İspanyolca',ru:'Rusça',ar:'Arapça'};
+const curLang=()=>((book&&book.lang)||'tr').slice(0,2).toLowerCase();
+function detectLang(b){
+  const t=b.chapters.flatMap(c=>c.paras).join(' ').slice(0,30000).toLocaleLowerCase('tr');
+  const n=re=>(t.match(re)||[]).length;
+  const tr=n(/[ğış]/g)+3*n(/(^|\s)(ve|bir|bu|da|de|ile|için|çok|ama|gibi)(?=[\s,.;:!?])/g);
+  const en=3*n(/(^|\s)(the|and|of|to|is|that|was|with|for|you)(?=[\s,.;:!?])/g);
+  return en>tr?'en':'tr';
+}
 function loadVoices(){if(!synth)return;voices=synth.getVoices();fillVoices()}
 function fillVoices(){
-  const sel=$('#voiceSel'),lang=((book&&book.lang)||'tr').slice(0,2).toLowerCase();
+  const sel=$('#voiceSel'),lang=curLang();
   const own=voices.filter(v=>v.lang.toLowerCase().replace('_','-').startsWith(lang)),use=own.length?own:voices;
   use.sort((a,b)=>b.localService-a.localService);
-  sel.innerHTML=use.length?use.map(v=>`<option value="${esc(v.voiceURI)}">${esc(v.name)} · ${esc(v.lang)}${v.localService?'':' · çevrimiçi'}</option>`).join(''):'<option value="">Bu cihazda ses bulunamadı</option>';
-  if(S.voice&&use.some(v=>v.voiceURI===S.voice))sel.value=S.voice;
+  sel.innerHTML=(own.length||!voices.length?'':`<option value="">${LN[lang]||lang} ses yok: telefon ayarlarından indir</option>`)+(use.length?use.map(v=>`<option value="${esc(v.voiceURI)}">${esc(v.name)} · ${esc(v.lang)}${v.localService?'':' · çevrimiçi'}</option>`).join(''):'<option value="">Bu cihazda ses bulunamadı</option>');
+  const pref=(S.voices||{})[lang];if(pref&&use.some(v=>v.voiceURI===pref))sel.value=pref;else if(own.length)sel.value=own[0].voiceURI;
+  for(const b of $('#langBox').querySelectorAll('button'))b.setAttribute('aria-pressed',b.dataset.l===lang);
 }
 function speakFrom(i){
   const gen=++ttsGen;let e=i;while(e<W.length-1&&!isStop(W[e]))e++;e=Math.min(e+1,W.length);
   let text='';const offs=[];for(let k=i;k<e;k++){offs.push(text.length);text+=W[k].t+' '}
   const u=new SpeechSynthesisUtterance(text),v=voices.find(v=>v.voiceURI===$('#voiceSel').value);
-  if(v){u.voice=v;u.lang=v.lang}else u.lang=(book&&book.lang)||'tr-TR';
+  if(v){u.voice=v;u.lang=v.lang}else u.lang=({tr:'tr-TR',en:'en-US'})[curLang()]||curLang();
   u.rate=rate();
-  const per=60000/(170*rate());let k=0,gotB=false;
+  const per=60000/((curLang()==='en'?180:170)*rate());let k=0,gotB=false;
   const show=(j,dur)=>{shown=j;idx=j;if(S.mode==='rsvp')showRSVP(j,j+1);else pace(j,dur);info()};
   const est=()=>{if(gen!==ttsGen||gotB)return;k++;if(i+k<e){const d=per*mult(W[i+k]);show(i+k,d);estT=setTimeout(est,d)}};
   u.onstart=()=>{if(gen!==ttsGen)return;const d=per*mult(W[i]);show(i,d);estT=setTimeout(est,d)};
@@ -347,7 +365,7 @@ function stopSpeech(){ttsGen++;clearTimeout(estT);if(synth)synth.cancel()}
 const useTts=()=>S.tts&&synth&&S.mode!=='scroll';
 function setTts(on){
   S.tts=!!on&&!!synth;saveSet();const b=$('#ttsBtn');b.setAttribute('aria-pressed',S.tts);b.style.color=S.tts?'var(--red)':'';
-  $('#voiceSel').hidden=!S.tts;if(S.tts&&!voices.length)loadVoices();
+  $('#voiceSel').hidden=$('#langBox').hidden=!S.tts;if(S.tts&&!voices.length)loadVoices();
 }
 function restartSpeech(){if(playing&&useTts()){clearTimeout(rateT);rateT=setTimeout(()=>{pause();play()},350)}}
 /* ---------- playback ---------- */
@@ -414,9 +432,32 @@ function seekSent(dir){
   refresh();if(was)play();
 }
 /* ---------- storage of last book ---------- */
-const idb=()=>new Promise((res,rej)=>{const r=indexedDB.open('hizli-okuyucu',1);r.onupgradeneeded=()=>r.result.createObjectStore('b');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
-async function putLast(b){try{const db=await idb();db.transaction('b','readwrite').objectStore('b').put({title:b.title,lang:b.lang||'',chapters:b.chapters.map(c=>({title:c.title,paras:c.paras}))},'last')}catch(e){}}
-async function getLast(){try{const db=await idb();return await new Promise(r=>{const q=db.transaction('b').objectStore('b').get('last');q.onsuccess=()=>r(q.result||null);q.onerror=()=>r(null)})}catch(e){return null}}
+const MAXB=5;
+const idb=()=>new Promise((res,rej)=>{const r=indexedDB.open('hizli-okuyucu',2);r.onupgradeneeded=()=>{const d=r.result;for(const n of ['b','m'])if(!d.objectStoreNames.contains(n))d.createObjectStore(n)};r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
+const rq=q=>new Promise(r=>{q.onsuccess=()=>r(q.result);q.onerror=()=>r(null)});
+const done=t=>new Promise(r=>{t.oncomplete=t.onerror=t.onabort=()=>r()});
+const countW=b=>b.chapters.reduce((n,c)=>n+c.paras.reduce((m,p)=>m+p.split(' ').filter(Boolean).length,0),0);
+async function saveBook(b,id,words){
+  const db=await idb(),t=db.transaction(['b','m'],'readwrite');
+  t.objectStore('b').put({title:b.title,lang:b.lang||'',chapters:b.chapters.map(c=>({title:c.title,paras:c.paras}))},id);
+  t.objectStore('m').put({id,title:b.title||'Adsız kitap',words,ts:Date.now()},id);await done(t);
+  const all=await listBooks();for(const m of all.slice(MAXB))await delBook(m.id);
+}
+async function touchBook(id){try{const db=await idb(),st=db.transaction('m','readwrite').objectStore('m'),m=await rq(st.get(id));if(m){m.ts=Date.now();st.put(m,id)}}catch(e){}}
+async function listBooks(){
+  const db=await idb(),old=await rq(db.transaction('b').objectStore('b').get('last'));
+  if(old){const w=countW(old),id=(old.title||'kitap')+'|'+w,t=db.transaction('b','readwrite');t.objectStore('b').delete('last');await done(t);await saveBook(old,id,w)}
+  return ((await rq(db.transaction('m').objectStore('m').getAll()))||[]).sort((a,b)=>b.ts-a.ts);
+}
+async function getBook(id){const db=await idb();return rq(db.transaction('b').objectStore('b').get(id))}
+async function delBook(id){const db=await idb(),t=db.transaction(['b','m'],'readwrite');t.objectStore('b').delete(id);t.objectStore('m').delete(id);await done(t);try{localStorage.removeItem('hr:pos:'+id)}catch(e){}}
+const ago=ts=>{const d=Math.floor((new Date().setHours(0,0,0,0)-new Date(ts).setHours(0,0,0,0))/864e5);return d<=0?'bugün':d===1?'dün':d+' gün önce'};
+async function renderLib(){
+  let list=[];try{list=await listBooks()}catch(e){}
+  $('#lib').hidden=!list.length;
+  $('#libList').innerHTML=list.map(m=>{let p=0;try{p=Math.min(100,Math.floor((+localStorage.getItem('hr:pos:'+m.id)||0)/m.words*100))}catch(e){}
+    return `<div class="bk"><button class="o" data-id="${esc(m.id)}"><b>${esc(m.title)}</b><small>%${p} okundu · ${ago(m.ts)}</small><i style="--p:${p}%"></i></button><button class="ic x" data-del="${esc(m.id)}" aria-label="${esc(m.title)} kitabını listeden sil"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>`}).join('');
+}
 /* ---------- open ---------- */
 function openBook(b,store){
   book=b;build();if(!W.length)throw new Error('Kitapta okunabilir metin bulunamadı.');
@@ -425,8 +466,11 @@ function openBook(b,store){
   $('#bTitle').textContent=b.title||'Adsız kitap';
   $('#chSel').innerHTML=b.chapters.map((c,i)=>`<option value="${i}">${i+1}. ${esc(c.title)}</option>`).join('');
   $('#home').hidden=true;$('#reader').hidden=false;stopDemo();
+  let ov=null;try{ov=localStorage.getItem('hr:lang:'+bookId)}catch(e){}
+  const meta=(b.lang||'').slice(0,2).toLowerCase();b.lang=ov||(meta&&!['en','tr','un'].includes(meta)?meta:detectLang(b));
+  $('#langBox').innerHTML='<small>Dil</small>'+[...new Set(['tr','en',b.lang])].map(l=>`<button data-l="${esc(l)}">${esc(l.toUpperCase())}</button>`).join('');
   setWpm(S.wpm);setChunk(S.chunk);setMode(S.mode);fillVoices();setTts(S.tts);
-  if(store)putLast(b);
+  if(store===true)saveBook(b,bookId,W.length).catch(()=>{});else if(store==='touch')touchBook(bookId);
 }
 async function openFile(f){
   const err=$('#err');err.textContent='Açılıyor…';
@@ -458,8 +502,10 @@ pick.addEventListener('dragover',e=>{e.preventDefault();pick.classList.add('over
 pick.addEventListener('dragleave',()=>pick.classList.remove('over'));
 pick.addEventListener('drop',e=>{e.preventDefault();pick.classList.remove('over');const f=e.dataTransfer.files[0];if(f)openFile(f)});
 $('#demoBtn').addEventListener('click',()=>openBook(JSON.parse(JSON.stringify(DEMO)),false));
-$('#lastBtn').addEventListener('click',async()=>{const b=await getLast();if(b)openBook(b,false)});
-$('#backBtn').addEventListener('click',()=>{pause();savePos();$('#reader').hidden=true;$('#home').hidden=false;$('#lastBtn').hidden=false;startDemo()});
+$('#libList').addEventListener('click',async e=>{const o=e.target.closest('[data-id]'),d=e.target.closest('[data-del]');
+  if(d){await delBook(d.dataset.del);renderLib();return}
+  if(o){const b=await getBook(o.dataset.id);if(b){try{openBook(b,'touch')}catch(er){$('#err').textContent=er.message}}else renderLib()}});
+$('#backBtn').addEventListener('click',()=>{pause();savePos();$('#reader').hidden=true;$('#home').hidden=false;renderLib();startDemo()});
 $('#playBtn').addEventListener('click',toggle);
 $('#prevS').addEventListener('click',()=>seekSent(-1));
 $('#nextS').addEventListener('click',()=>seekSent(1));
@@ -471,7 +517,8 @@ $('#fDn').addEventListener('click',()=>setFs(S.fs-4));
 $('#fUp').addEventListener('click',()=>setFs(S.fs+4));
 if(synth){loadVoices();synth.addEventListener?synth.addEventListener('voiceschanged',loadVoices):(synth.onvoiceschanged=loadVoices)}else $('#ttsBtn').parentNode.hidden=true;
 $('#ttsBtn').addEventListener('click',()=>{const was=playing;if(was)pause();setTts(!S.tts);if(was)play()});
-$('#voiceSel').addEventListener('change',e=>{S.voice=e.target.value;saveSet();restartSpeech()});
+$('#voiceSel').addEventListener('change',e=>{S.voices=S.voices||{};S.voices[curLang()]=e.target.value;saveSet();restartSpeech()});
+$('#langBox').addEventListener('click',e=>{const l=e.target.dataset.l;if(!l||!book)return;book.lang=l;try{localStorage.setItem('hr:lang:'+bookId,l)}catch(er){}fillVoices();restartSpeech()});
 $('#prog').addEventListener('input',e=>{const was=playing;if(playing)pause();idx=Math.floor(+e.target.value/1000*(W.length-1));refresh();if(was)play()});
 $('#chSel').addEventListener('change',e=>{const was=playing;if(playing)pause();idx=book.chapters[+e.target.value].start;refresh();if(was)play()});
 flow.addEventListener('scroll',()=>{if(!playing&&S.mode==='scroll'){clearTimeout(flow._t);flow._t=setTimeout(()=>{idx=wordAtBand();info();savePos()},200)}},{passive:true});
@@ -483,7 +530,7 @@ document.addEventListener('keydown',e=>{
 document.addEventListener('visibilitychange',()=>{if(document.hidden){savePos();if(!useTts())pause()}});
 const ro=new ResizeObserver(()=>{if(!book||$('#reader').hidden)return;if(S.mode!=='rsvp'){const i=S.mode==='scroll'?wordAtBand():idx;layout();if(!playing){idx=i;refresh()}}else if(!playing)refresh()});
 ro.observe(stage);
-getLast().then(b=>{if(b)$('#lastBtn').hidden=false});
+renderLib();
 startDemo();
 if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
 }
