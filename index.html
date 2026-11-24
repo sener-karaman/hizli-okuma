@@ -61,7 +61,13 @@ select{font:13px Inter,sans-serif;color:var(--mute);background:var(--bg);border:
 #flow{position:absolute;inset:0;overflow-y:auto;padding-inline:max(6vw,18px);font:19px/1.75 Literata,Georgia,serif;overscroll-behavior:contain}
 #flow p{max-width:34em;margin:0 auto .9em}
 #flow.scroll{-webkit-mask-image:linear-gradient(transparent 4%,#000 24%,#000 52%,transparent 92%);mask-image:linear-gradient(transparent 4%,#000 24%,#000 52%,transparent 92%)}
-#flow span.on{background:var(--hl);border-radius:3px;box-shadow:0 0 0 2px var(--hl)}
+#flow{isolation:isolate}
+#glide,#lineT{position:absolute;left:0;top:0;z-index:-1;pointer-events:none;height:0}
+#glide{background:var(--hl);border-radius:6px;will-change:transform,width;transition-property:transform,width;transition-timing-function:cubic-bezier(.3,.7,.4,1)}
+#lineT{right:0;background:color-mix(in srgb,var(--hl) 32%,transparent);transition:transform .25s ease,height .25s ease}
+#voiceSel{flex:1 1 100%;font-size:14px;color:var(--ink);background:var(--panel);border-radius:10px;padding:0 10px;min-height:40px}
+#ttsBtn{display:flex;align-items:center;gap:6px;padding:0 10px}#ttsBtn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2}
+#ttsBtn:disabled{opacity:.4}
 #band{position:absolute;left:0;right:0;border-left:3px solid var(--red);pointer-events:none}
 .ctl{border-top:1px solid var(--line);padding:6px max(4vw,12px) 10px;display:grid;gap:6px}
 input[type=range]{width:100%;accent-color:var(--red);min-height:30px;margin:0}
@@ -124,6 +130,8 @@ output{min-width:5.2em;font-variant-numeric:tabular-nums;white-space:nowrap;font
       <div class="wp"><input type="range" id="wpmR" min="100" max="1000" step="25" aria-label="Okuma hızı"><output id="wpmO"></output></div>
       <div class="mini" id="chunkBox"><small>Grup</small><button data-c="1">1</button><button data-c="2">2</button><button data-c="3">3</button></div>
       <div class="mini"><button id="fDn" aria-label="Yazıyı küçült">A−</button><button id="fUp" aria-label="Yazıyı büyüt">A+</button></div>
+      <div class="mini"><button id="ttsBtn" aria-pressed="false" aria-label="Sesli okuma"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>Ses</button></div>
+      <select id="voiceSel" aria-label="Ses seçimi" hidden></select>
     </div>
   </footer>
 </section>
@@ -131,7 +139,7 @@ output{min-width:5.2em;font-variant-numeric:tabular-nums;white-space:nowrap;font
 <script>
 {
 const $=s=>document.querySelector(s);
-const S={wpm:300,mode:'rsvp',chunk:1,fs:40};
+const S={wpm:300,mode:'rsvp',chunk:1,fs:40,tts:false,voice:''};
 try{Object.assign(S,JSON.parse(localStorage.getItem('hr:set')||'{}'))}catch(e){}
 const saveSet=()=>{try{localStorage.setItem('hr:set',JSON.stringify(S))}catch(e){}};
 const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -178,13 +186,13 @@ async function readEpub(buf){
   const opfPath=new DOMParser().parseFromString(cont,'application/xml').getElementsByTagName('rootfile')[0].getAttribute('full-path');
   const opf=new DOMParser().parseFromString(await txt(opfPath),'application/xml'),base=opfPath.includes('/')?opfPath.slice(0,opfPath.lastIndexOf('/')+1):'';
   const man={};for(const it of opf.getElementsByTagName('item'))man[it.getAttribute('id')]=it.getAttribute('href');
-  const tEl=opf.getElementsByTagName('dc:title')[0]||opf.getElementsByTagNameNS('*','title')[0],chapters=[];
+  const tEl=opf.getElementsByTagName('dc:title')[0]||opf.getElementsByTagNameNS('*','title')[0],lEl=opf.getElementsByTagName('dc:language')[0],chapters=[];
   for(const ir of opf.getElementsByTagName('itemref')){
     const href=man[ir.getAttribute('idref')];if(!href)continue;
     const s=await txt(rel(base,decodeURIComponent(href.split('#')[0])));if(!s)continue;
     const ch=parseMarkup(s);if(ch.paras.length)chapters.push(ch);
   }
-  return{title:tEl?tEl.textContent.trim():'',chapters};
+  return{title:tEl?tEl.textContent.trim():'',lang:lEl?lEl.textContent.trim():'',chapters};
 }
 /* ---------- MOBI / AZW3 / PRC ---------- */
 function lz77(src){
@@ -274,9 +282,9 @@ function layout(){
 }
 function measure(){if(!spans.length)return;const h=flow.scrollHeight-stage.clientHeight;pxSec=S.wpm/60*(h/spans.length)}
 function renderCh(c){
-  const ch=book.chapters[c];let h='',i=ch.start;
+  const ch=book.chapters[c];let h='<div id="lineT"></div><div id="glide"></div>',i=ch.start;
   for(const p of ch.paras){const n=p.split(' ').filter(Boolean).length;h+='<p>';for(let k=0;k<n;k++,i++)h+=`<span>${esc(W[i].t)}</span> `;h+='</p>'}
-  flow.innerHTML=h;spans=flow.getElementsByTagName('span');rCh=c;onSpan=null;measure();
+  flow.innerHTML=h;spans=flow.getElementsByTagName('span');rCh=c;measure();
 }
 const spanOf=i=>{if(W[i].c!==rCh)renderCh(W[i].c);return spans[i-book.chapters[rCh].start]};
 function placeAt(i){const s=spanOf(i);if(s)flow.scrollTop=s.offsetTop-bandY}
@@ -285,17 +293,70 @@ function wordAtBand(){
   while(lo<hi){const m=(lo+hi)>>1;if(spans[m].offsetTop+spans[m].offsetHeight>y)hi=m;else lo=m+1}
   return book.chapters[rCh].start+lo;
 }
-function pace(i){
-  const s=spanOf(i);if(!s)return;if(onSpan)onSpan.classList.remove('on');s.classList.add('on');onSpan=s;
-  const top=s.offsetTop-flow.scrollTop;if(top<bandY*.5||top>bandY*1.7)flow.scrollTo({top:s.offsetTop-bandY,behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'auto':'smooth'});
+/* Pacer: the highlight glides between words, the current line gets a soft tint,
+   and the page eases up one line at a time so the eye stays at the same height. */
+const RM=matchMedia('(prefers-reduced-motion:reduce)');
+let scrollTarget=null,easeRaf=0;
+function pace(i,dur){
+  const s=spanOf(i);if(!s)return;
+  const g=$('#glide'),l=$('#lineT'),y=s.offsetTop,h=s.offsetHeight,newLine=g._y!==y;
+  g.style.transitionDuration=(newLine||RM.matches||!dur?0:Math.min(dur*.7,220))+'ms';
+  g.style.height=h+'px';g.style.width=(s.offsetWidth+8)+'px';g.style.transform=`translate(${s.offsetLeft-4}px,${y}px)`;g._y=y;
+  if(newLine){l.style.height=h+'px';l.style.transform=`translateY(${y}px)`;scrollTarget=y-bandY;ease()}
 }
+function ease(){
+  if(RM.matches||!playing){if(scrollTarget!=null)flow.scrollTop=scrollTarget;return}
+  if(easeRaf)return;
+  const tick=()=>{
+    if(scrollTarget==null||S.mode==='scroll'){easeRaf=0;return}
+    const d=scrollTarget-flow.scrollTop;
+    if(Math.abs(d)<1.5){flow.scrollTop=scrollTarget;easeRaf=0;return}
+    const before=flow.scrollTop;flow.scrollTop+=Math.sign(d)*Math.max(1,Math.abs(d)*.09);
+    if(flow.scrollTop===before){easeRaf=0;return}
+    easeRaf=requestAnimationFrame(tick);
+  };
+  easeRaf=requestAnimationFrame(tick);
+}
+/* ---------- speech (device voices, offline when the voice is installed) ---------- */
+const synth=window.speechSynthesis;let voices=[],ttsGen=0,estT=0,rateT=0;
+const rate=()=>Math.max(.5,Math.min(2.2,S.wpm/170));
+function loadVoices(){if(!synth)return;voices=synth.getVoices();fillVoices()}
+function fillVoices(){
+  const sel=$('#voiceSel'),lang=((book&&book.lang)||'tr').slice(0,2).toLowerCase();
+  const own=voices.filter(v=>v.lang.toLowerCase().replace('_','-').startsWith(lang)),use=own.length?own:voices;
+  use.sort((a,b)=>b.localService-a.localService);
+  sel.innerHTML=use.length?use.map(v=>`<option value="${esc(v.voiceURI)}">${esc(v.name)} · ${esc(v.lang)}${v.localService?'':' · çevrimiçi'}</option>`).join(''):'<option value="">Bu cihazda ses bulunamadı</option>';
+  if(S.voice&&use.some(v=>v.voiceURI===S.voice))sel.value=S.voice;
+}
+function speakFrom(i){
+  const gen=++ttsGen;let e=i;while(e<W.length-1&&!isStop(W[e]))e++;e=Math.min(e+1,W.length);
+  let text='';const offs=[];for(let k=i;k<e;k++){offs.push(text.length);text+=W[k].t+' '}
+  const u=new SpeechSynthesisUtterance(text),v=voices.find(v=>v.voiceURI===$('#voiceSel').value);
+  if(v){u.voice=v;u.lang=v.lang}else u.lang=(book&&book.lang)||'tr-TR';
+  u.rate=rate();
+  const per=60000/(170*rate());let k=0,gotB=false;
+  const show=(j,dur)=>{shown=j;idx=j;if(S.mode==='rsvp')showRSVP(j,j+1);else pace(j,dur);info()};
+  const est=()=>{if(gen!==ttsGen||gotB)return;k++;if(i+k<e){const d=per*mult(W[i+k]);show(i+k,d);estT=setTimeout(est,d)}};
+  u.onstart=()=>{if(gen!==ttsGen)return;const d=per*mult(W[i]);show(i,d);estT=setTimeout(est,d)};
+  u.onboundary=ev=>{if(gen!==ttsGen||(ev.name&&ev.name!=='word'))return;gotB=true;clearTimeout(estT);let j=offs.length-1;while(j>0&&offs[j]>ev.charIndex)j--;show(i+j,per*mult(W[i+j]))};
+  u.onend=()=>{if(gen!==ttsGen)return;clearTimeout(estT);idx=e;if(++tickN%3===0)savePos();if(!playing)return;if(idx>=W.length){pause();return}speakFrom(idx)};
+  u.onerror=ev=>{if(gen!==ttsGen||ev.error==='interrupted'||ev.error==='canceled')return;clearTimeout(estT);pause();setTts(false)};
+  synth.speak(u);
+}
+function stopSpeech(){ttsGen++;clearTimeout(estT);if(synth)synth.cancel()}
+const useTts=()=>S.tts&&synth&&S.mode!=='scroll';
+function setTts(on){
+  S.tts=!!on&&!!synth;saveSet();const b=$('#ttsBtn');b.setAttribute('aria-pressed',S.tts);b.style.color=S.tts?'var(--red)':'';
+  $('#voiceSel').hidden=!S.tts;if(S.tts&&!voices.length)loadVoices();
+}
+function restartSpeech(){if(playing&&useTts()){clearTimeout(rateT);rateT=setTimeout(()=>{pause();play()},350)}}
 /* ---------- playback ---------- */
 function step(){
   if(!playing)return;if(idx>=W.length){pause();return}
   const j=chunkEnd(idx);shown=idx;
-  if(S.mode==='rsvp')showRSVP(idx,j);else pace(idx);
   let d=0;for(let k=idx;k<j;k++)d+=mult(W[k]);d*=60000/S.wpm;if(j-idx>1)d*=.9;
   if(ramp>0){d*=1+ramp*.1;ramp--}
+  if(S.mode==='rsvp')showRSVP(idx,j);else pace(idx,d);
   idx=j;info();if(++tickN%25===0)savePos();
   timer=setTimeout(step,d);
 }
@@ -310,11 +371,12 @@ function scrollLoop(ts){
 async function play(){
   if(!W.length||playing)return;if(idx>=W.length-1)idx=0;
   playing=true;ramp=S.mode==='scroll'?40:8;$('#ctx').innerHTML='';icon();
+  if(useTts())speakFrom(idx);
+  else if(S.mode==='scroll'){lastTs=0;carry=0;requestAnimationFrame(scrollLoop)}else step();
   try{lock=await navigator.wakeLock.request('screen')}catch(e){lock=null}
-  if(S.mode==='scroll'){lastTs=0;carry=0;requestAnimationFrame(scrollLoop)}else step();
 }
 function pause(){
-  if(!playing)return;playing=false;clearTimeout(timer);
+  if(!playing)return;playing=false;clearTimeout(timer);stopSpeech();
   if(S.mode==='scroll')idx=wordAtBand();else idx=shown;
   icon();showCtx();info();savePos();try{lock&&lock.release()}catch(e){}lock=null;
 }
@@ -338,11 +400,11 @@ function setMode(m){
   for(const b of $('#modes').children)b.setAttribute('aria-pressed',b.dataset.m===m);
   $('#rsvp').hidden=m!=='rsvp';flow.hidden=m==='rsvp';$('#band').hidden=m!=='scroll';$('#chunkBox').hidden=m!=='rsvp';
   flow.classList.toggle('scroll',m==='scroll');
+  $('#ttsBtn').disabled=m==='scroll';$('#ttsBtn').title=m==='scroll'?'Ses, Kelime ve Takip modlarında çalışır':'';
   if(m!=='rsvp'){layout();if(W.length&&W[idx].c!==rCh)renderCh(W[idx].c)}
-  if(onSpan){onSpan.classList.remove('on');onSpan=null}
   refresh();if(was)play();
 }
-function setWpm(v){S.wpm=Math.max(100,Math.min(1000,v));$('#wpmR').value=S.wpm;$('#wpmO').textContent=S.wpm+' k/dk';measure();saveSet();if(!playing)info()}
+function setWpm(v){S.wpm=Math.max(100,Math.min(1000,v));$('#wpmR').value=S.wpm;$('#wpmO').textContent=S.wpm+' k/dk';measure();saveSet();if(!playing)info();restartSpeech()}
 function setChunk(c){S.chunk=c;saveSet();for(const b of $('#chunkBox').querySelectorAll('button'))b.setAttribute('aria-pressed',+b.dataset.c===c);if(!playing)refresh()}
 function setFs(v){if(S.mode==='scroll'&&!playing)idx=wordAtBand();S.fs=Math.max(24,Math.min(76,v));saveSet();if(S.mode!=='rsvp'){layout();if(!playing)refresh();else if(S.mode==='scroll')placeAt(idx)}else if(!playing)refresh()}
 const savePos=()=>{try{localStorage.setItem('hr:pos:'+bookId,String(S.mode==='scroll'&&playing?wordAtBand():idx))}catch(e){}};
@@ -353,7 +415,7 @@ function seekSent(dir){
 }
 /* ---------- storage of last book ---------- */
 const idb=()=>new Promise((res,rej)=>{const r=indexedDB.open('hizli-okuyucu',1);r.onupgradeneeded=()=>r.result.createObjectStore('b');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
-async function putLast(b){try{const db=await idb();db.transaction('b','readwrite').objectStore('b').put({title:b.title,chapters:b.chapters.map(c=>({title:c.title,paras:c.paras}))},'last')}catch(e){}}
+async function putLast(b){try{const db=await idb();db.transaction('b','readwrite').objectStore('b').put({title:b.title,lang:b.lang||'',chapters:b.chapters.map(c=>({title:c.title,paras:c.paras}))},'last')}catch(e){}}
 async function getLast(){try{const db=await idb();return await new Promise(r=>{const q=db.transaction('b').objectStore('b').get('last');q.onsuccess=()=>r(q.result||null);q.onerror=()=>r(null)})}catch(e){return null}}
 /* ---------- open ---------- */
 function openBook(b,store){
@@ -363,7 +425,7 @@ function openBook(b,store){
   $('#bTitle').textContent=b.title||'Adsız kitap';
   $('#chSel').innerHTML=b.chapters.map((c,i)=>`<option value="${i}">${i+1}. ${esc(c.title)}</option>`).join('');
   $('#home').hidden=true;$('#reader').hidden=false;stopDemo();
-  setWpm(S.wpm);setChunk(S.chunk);setMode(S.mode);
+  setWpm(S.wpm);setChunk(S.chunk);setMode(S.mode);fillVoices();setTts(S.tts);
   if(store)putLast(b);
 }
 async function openFile(f){
@@ -378,7 +440,7 @@ async function openFile(f){
     openBook(b,true);err.textContent='';
   }catch(e){err.textContent=e.message||'Dosya açılamadı.'}
 }
-const DEMO={title:'Hızlı okumaya giriş',chapters:[
+const DEMO={title:'Hızlı okumaya giriş',lang:'tr',chapters:[
  {title:'Gözün ritmi',paras:['Gözün Ritmi','Okurken gözlerimiz satır boyunca kaymaz; küçük sıçramalar yapar ve her duruşta birkaç harfi netleştirir. Bu duruşlara sabitlenme denir. Sıradan bir okur, her sabitlenmede saniyenin yaklaşık dörtte birini harcar.','Kelimeleri ekranın aynı noktasında göstermek bu sıçramaları ortadan kaldırır. Kırmızı harf, gözün bakması gereken yeri işaret eder; geri kalanını beyin kendisi tamamlar.','Yine de hız tek başına amaç değildir. Anlamadan geçilen bir sayfa, hiç okunmamış bir sayfadan pek farklı değildir. Bu yüzden virgüllerde ve noktalarda kısa molalar verilir, uzun kelimeler ekranda biraz daha uzun kalır.']},
  {title:'Küçük adımlar',paras:['Küçük Adımlar','İlk gün dakikada üç yüz kelimeyle başlayın. Rahat hissettiğinizde hızı yirmi beş kelime artırın. Bir cümleyi kaçırdığınızı fark ederseniz geri tuşuna dokunun; cümlenin başına dönersiniz.','Uzun okumalarda Takip modu daha az yorar: sayfa düzeni yerinde kalır, yalnızca okunan kelime vurgulanır. Akış modunda ise metin sabit bir hızla yukarı kayar ve siz kırmızı çizginin gösterdiği banda bakarsınız.','Her gün on beş dakika yeterlidir. Birkaç hafta içinde hem hızınızın hem de odaklanma sürenizin arttığını göreceksiniz.']}]};
 /* ---------- home demo ---------- */
@@ -407,6 +469,9 @@ $('#chunkBox').addEventListener('click',e=>{const c=+e.target.dataset.c;if(c)set
 $('#wpmR').addEventListener('input',e=>setWpm(+e.target.value));
 $('#fDn').addEventListener('click',()=>setFs(S.fs-4));
 $('#fUp').addEventListener('click',()=>setFs(S.fs+4));
+if(synth){loadVoices();synth.addEventListener?synth.addEventListener('voiceschanged',loadVoices):(synth.onvoiceschanged=loadVoices)}else $('#ttsBtn').parentNode.hidden=true;
+$('#ttsBtn').addEventListener('click',()=>{const was=playing;if(was)pause();setTts(!S.tts);if(was)play()});
+$('#voiceSel').addEventListener('change',e=>{S.voice=e.target.value;saveSet();restartSpeech()});
 $('#prog').addEventListener('input',e=>{const was=playing;if(playing)pause();idx=Math.floor(+e.target.value/1000*(W.length-1));refresh();if(was)play()});
 $('#chSel').addEventListener('change',e=>{const was=playing;if(playing)pause();idx=book.chapters[+e.target.value].start;refresh();if(was)play()});
 flow.addEventListener('scroll',()=>{if(!playing&&S.mode==='scroll'){clearTimeout(flow._t);flow._t=setTimeout(()=>{idx=wordAtBand();info();savePos()},200)}},{passive:true});
@@ -415,7 +480,7 @@ document.addEventListener('keydown',e=>{
   if(e.key===' '){e.preventDefault();toggle()}else if(e.key==='ArrowLeft')seekSent(-1);else if(e.key==='ArrowRight')seekSent(1);
   else if(e.key==='ArrowUp'){e.preventDefault();setWpm(S.wpm+25)}else if(e.key==='ArrowDown'){e.preventDefault();setWpm(S.wpm-25)}
 });
-document.addEventListener('visibilitychange',()=>{if(document.hidden){pause();savePos()}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){savePos();if(!useTts())pause()}});
 const ro=new ResizeObserver(()=>{if(!book||$('#reader').hidden)return;if(S.mode!=='rsvp'){const i=S.mode==='scroll'?wordAtBand():idx;layout();if(!playing){idx=i;refresh()}}else if(!playing)refresh()});
 ro.observe(stage);
 getLast().then(b=>{if(b)$('#lastBtn').hidden=false});
